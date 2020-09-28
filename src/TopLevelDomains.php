@@ -318,10 +318,17 @@ final class TopLevelDomains implements Countable, IteratorAggregate
 
         $publicSuffix = null;
         $label = $domain->toAscii()->getLabel(0);
-        foreach ($this as $tld) {
-            if ($tld->getContent() === $label) {
-                $publicSuffix = $tld;
-                break;
+
+        static $prepareData;
+        $prepareData = $prepareData ?? $this->prepareData();
+        if (isset($prepareData[$label])) {
+            $publicSuffix = $prepareData[$label];
+        } else {
+            foreach ($this as $tld) {
+                if ($tld->getContent() === $label) {
+                    $publicSuffix = $tld;
+                    break;
+                }
             }
         }
 
@@ -372,5 +379,30 @@ final class TopLevelDomains implements Countable, IteratorAggregate
         $clone->unicodeIDNAOption = $option;
 
         return $clone;
+    }
+
+    private function prepareData() {
+        $cache = new Cache();
+        $result = $cache->get('tld-test-cache');
+
+        if (isset($result) && is_array($result)) {
+            return $result;
+        }
+
+        $result = [];
+        foreach ($this->records as $tld) {
+            $publicSuffix = (new PublicSuffix(
+                $tld,
+                PublicSuffix::ICANN_DOMAINS,
+                $this->asciiIDNAOption,
+                $this->unicodeIDNAOption
+            ))->toAscii();
+
+            $result[$publicSuffix->getContent()] = $publicSuffix;
+        }
+
+        $cache->set('tld-test-cache', $result);
+
+        return $result;
     }
 }
